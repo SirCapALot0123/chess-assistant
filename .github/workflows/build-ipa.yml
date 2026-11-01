@@ -13,8 +13,10 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Download decrypted IPA
+        env:
+          IPA_URL: ${{ secrets.IPA_URL }}
         run: |
-          curl -fL --retry 3 -o chess.ipa "${{ inputs.ipa_url }}"
+          curl -fL --retry 3 -o chess.ipa "$IPA_URL"
           [ -s chess.ipa ] || { echo "::error::downloaded IPA is empty"; exit 1; }
 
       - name: Read Chess version + set output name
