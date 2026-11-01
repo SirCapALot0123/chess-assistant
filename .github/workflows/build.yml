@@ -67,5 +67,12 @@ jobs:
         run: |
           DEB=$(ls packages/*.deb | head -1)
           echo "built: $DEB"
-          gh release upload latest "$DEB" --clobber
-          gh release upload v2.5.2 "$DEB" --clobber || true
+
+          gh release view latest --repo "$GITHUB_REPOSITORY" || \
+            gh release create latest \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "Chess Assistant (rolling build)" \
+              --notes "Rolling development build." \
+              --prerelease
+
+          gh release upload latest "$DEB" --repo "$GITHUB_REPOSITORY" --clobber
