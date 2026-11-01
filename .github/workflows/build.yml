@@ -67,9 +67,5 @@ jobs:
         run: |
           DEB=$(ls packages/*.deb | head -1)
           echo "built: $DEB"
-          gh release delete latest --yes --cleanup-tag || true
-          gh release create latest "$DEB" \
-            --title "Chess Assistant (rolling build)" \
-            --notes "Rolling dev build. Use the v2.5.2 release for the stable download." \
-            --prerelease
+          gh release upload latest "$DEB" --clobber
           gh release upload v2.5.2 "$DEB" --clobber || true
