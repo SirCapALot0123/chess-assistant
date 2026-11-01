@@ -47,10 +47,3 @@ jobs:
           cyan -i chess.ipa -o "$OUT" \
                -uwef chess-assistant.deb -n "Chess" -b com.chess.iphone
           ls -la "$OUT"
-
-      - name: Publish IPA to release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release upload latest "$OUT" --repo "$GITHUB_REPOSITORY" --clobber
-          gh release upload v2.5.2 "$OUT" --repo "$GITHUB_REPOSITORY" --clobber || true
