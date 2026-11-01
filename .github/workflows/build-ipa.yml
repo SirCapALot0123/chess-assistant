@@ -14,11 +14,12 @@ jobs:
 
       - name: Download decrypted IPA
         env:
-          IPA_URL: ${{ secrets.IPA_URL }}
-        run: |
-          curl -fL --retry 3 -o chess.ipa "$IPA_URL"
-          [ -s chess.ipa ] || { echo "::error::downloaded IPA is empty"; exit 1; }
-
+            IPA_URL: ${{ secrets.IPA_URL }}
+          run: |
+            pipx run gdown "$IPA_URL" -O chess.ipa
+            [ -s chess.ipa ] || { echo "::error::IPA download failed"; exit 1; }
+            unzip -tq chess.ipa
+            
       - name: Read Chess version + set output name
         run: |
           unzip -qq chess.ipa -d _ver
@@ -26,7 +27,7 @@ jobs:
           VER="$(plutil -extract CFBundleShortVersionString raw -o - "$PLIST" 2>/dev/null || echo unknown)"
           rm -rf _ver
           echo "CHESS_VER=$VER" >> "$GITHUB_ENV"
-          echo "OUT=ChessAssistant_v2.5.2_Chess${VER}_${{ inputs.label }}.ipa" >> "$GITHUB_ENV"
+          echo "OUT=ChessAssistant_v2.5.2_Chess${VER}_ios17.ipa" >> "$GITHUB_ENV"
           echo "output: ChessAssistant_v2.5.2_Chess${VER}_${{ inputs.label }}.ipa"
 
       - name: Download Chess Assistant .deb
