@@ -1,0 +1,6 @@
+.venv/
+.deps/
+__pycache__/
+maia3-79m.pt
+*.mlpackage/
+validation-report.json

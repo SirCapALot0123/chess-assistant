@@ -3,6 +3,9 @@
 #import <CoreML/CoreML.h>
 #import <dlfcn.h>
 #import <mach-o/getsect.h>
+#import <errno.h>
+#import <fcntl.h>
+#import <unistd.h>
 #import <vector>
 #import <string>
 #import <unordered_map>
@@ -170,6 +173,24 @@ static bool MaiaLoadFromDir(NSString *dir) {
     return gMaiaModel != nil;
 }
 
+static BOOL writeEmbeddedSection(NSString *path, const uint8_t *bytes, unsigned long length) {
+    int fd = open(path.fileSystemRepresentation, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (fd < 0) return NO;
+
+    unsigned long offset = 0;
+    while (offset < length) {
+        size_t chunk = (size_t)MIN(1024UL * 1024UL, length - offset);
+        ssize_t written = write(fd, bytes + offset, chunk);
+        if (written < 0 && errno == EINTR) continue;
+        if (written <= 0) {
+            close(fd);
+            return NO;
+        }
+        offset += (unsigned long)written;
+    }
+    return close(fd) == 0;
+}
+
 // Reconstruct the mlpackage from sections embedded in our own dylib and load it
 // from the app's temp dir — works even when the app sandbox can't read /var/jb.
 extern "C" bool MaiaLoadEmbedded(void) {
@@ -188,7 +209,7 @@ extern "C" bool MaiaLoadEmbedded(void) {
         if (!mf || !md || !wg || mfLen == 0 || mdLen == 0 || wLen == 0) return false;
 
         NSFileManager *fm = [NSFileManager defaultManager];
-        NSString *dir = [NSTemporaryDirectory() stringByAppendingPathComponent:@"maia3_5m.mlpackage"];
+        NSString *dir = [NSTemporaryDirectory() stringByAppendingPathComponent:@"maia3_79m.mlpackage"];
         [fm removeItemAtPath:dir error:nil];
 
         NSString *weightsDir = [dir stringByAppendingPathComponent:@"Data/com.apple.CoreML/weights"];
@@ -200,8 +221,8 @@ extern "C" bool MaiaLoadEmbedded(void) {
         ok = ok && [fm createFileAtPath:[[dir stringByAppendingPathComponent:@"Data/com.apple.CoreML"]
                                          stringByAppendingPathComponent:@"model.mlmodel"]
                                contents:[NSData dataWithBytes:md length:mdLen] attributes:nil];
-        ok = ok && [fm createFileAtPath:[weightsDir stringByAppendingPathComponent:@"weight.bin"]
-                               contents:[NSData dataWithBytes:wg length:wLen] attributes:nil];
+        NSString *weightsPath = [weightsDir stringByAppendingPathComponent:@"weight.bin"];
+        ok = ok && writeEmbeddedSection(weightsPath, wg, wLen);
         if (!ok) return false;
 
         return MaiaLoadFromDir(dir);

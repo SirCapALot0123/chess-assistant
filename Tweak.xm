@@ -2227,13 +2227,13 @@ static BOOL fenHasBothKings(NSString *fen) {
 
 static NSArray<NSString *> *maiaCandidatePaths(void) {
     NSMutableArray *c = [@[
-        @"/var/jb/Library/Application Support/Chess/maia3_5m.mlpackage",
-        @"/Library/Application Support/Chess/maia3_5m.mlpackage",
+        @"/var/jb/Library/Application Support/Chess/maia3_79m.mlpackage",
+        @"/Library/Application Support/Chess/maia3_79m.mlpackage",
     ] mutableCopy];
     NSString *res = [[NSBundle mainBundle] resourcePath];
     if (res) {
-        [c addObject:[res stringByAppendingPathComponent:@"maia3_5m.mlpackage"]];
-        [c addObject:[res stringByAppendingPathComponent:@"Chess/maia3_5m.mlpackage"]];
+        [c addObject:[res stringByAppendingPathComponent:@"maia3_79m.mlpackage"]];
+        [c addObject:[res stringByAppendingPathComponent:@"Chess/maia3_79m.mlpackage"]];
     }
     // resolve the real jailbreak root via /private/preboot if /var/jb is unreadable from the app sandbox
     @try {
@@ -2244,7 +2244,7 @@ static NSArray<NSString *> *maiaCandidatePaths(void) {
             for (NSString *s in subs) {
                 if (![s hasPrefix:@"jb-"]) continue;
                 [c addObject:[[base stringByAppendingPathComponent:s]
-                    stringByAppendingPathComponent:@"Library/Application Support/Chess/maia3_5m.mlpackage"]];
+                    stringByAppendingPathComponent:@"Library/Application Support/Chess/maia3_79m.mlpackage"]];
             }
         }
     } @catch (NSException *e) {}
@@ -3792,10 +3792,10 @@ static void installBoardHooks(void) {
     gLoadTime = [NSDate date];
     gOrigLayouts = [NSMutableDictionary dictionary];
     loadPrefs();
-    dbg(@"loaded v2.5.2 (SF18 + Maia3)");
+    dbg(@"loaded v2.6.0 (SF18 + Maia3 79M)");
     EngineStart();
 
-    dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+    if (gUseMaia) dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
         NSArray *candidates = maiaCandidatePaths();
         __block BOOL found = NO;
         for (NSString *c in candidates) {

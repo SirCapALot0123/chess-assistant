@@ -13,11 +13,19 @@ Chess_LIBRARIES  = substrate
 Chess_CFLAGS     = -fobjc-arc -Wno-deprecated-declarations -Isf/src -std=c++17
 Chess_LDFLAGS    = -Lsf/src -lstockfish -lc++
 
-# embed Maia model into the dylib (files staged at repo root by CI)
-ifneq ($(wildcard maia_wghts.bin),)
-Chess_LDFLAGS    += -Wl,-sectcreate,__TEXT,__maia_mfst,maia_mfst.json
-Chess_LDFLAGS    += -Wl,-sectcreate,__TEXT,__maia_model,maia_model.bin
-Chess_LDFLAGS    += -Wl,-sectcreate,__TEXT,__maia_wghts,maia_wghts.bin
+# Embed the validated Maia 79M Core ML package in the tweak dylib.
+MAIA_PACKAGE = tools/maia79m/maia3-79m.mlpackage
+ifeq ($(wildcard $(MAIA_PACKAGE)/Manifest.json),)
+$(error Maia 79M package missing: run tools/maia79m/convert_validate.py --mode all)
 endif
+ifeq ($(wildcard $(MAIA_PACKAGE)/Data/com.apple.CoreML/model.mlmodel),)
+$(error Maia 79M model file missing: $(MAIA_PACKAGE))
+endif
+ifeq ($(wildcard $(MAIA_PACKAGE)/Data/com.apple.CoreML/weights/weight.bin),)
+$(error Maia 79M weight file missing: $(MAIA_PACKAGE))
+endif
+Chess_LDFLAGS    += -Wl,-sectcreate,__TEXT,__maia_mfst,$(MAIA_PACKAGE)/Manifest.json
+Chess_LDFLAGS    += -Wl,-sectcreate,__TEXT,__maia_model,$(MAIA_PACKAGE)/Data/com.apple.CoreML/model.mlmodel
+Chess_LDFLAGS    += -Wl,-sectcreate,__TEXT,__maia_wghts,$(MAIA_PACKAGE)/Data/com.apple.CoreML/weights/weight.bin
 
 include $(THEOS)/makefiles/tweak.mk

@@ -1,9 +1,9 @@
 Package: com.chess.assistant
 Name: Chess Assistant
 Depends: mobilesubstrate
-Version: 2.5.2
+Version: 2.6.0
 Architecture: iphoneos-arm64
-Description: On-device chess move assistant with bundled Stockfish 18 and Maia 3 engines.
+Description: On-device chess move assistant with bundled Stockfish 18 and Maia 3 79M engines.
              Human-like or best-move suggestions from 400 to 3500 ELO, arrows on the board.
 Maintainer: epic
 Author: epic

@@ -1,0 +1,4 @@
+coremltools==9.0
+numpy==2.2.6
+python-chess==1.999
+torch==2.7.0

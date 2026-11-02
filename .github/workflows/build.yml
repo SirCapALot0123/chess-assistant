@@ -36,43 +36,104 @@ jobs:
           ar rcs libstockfish.a $(find . -name '*.cpp.o' ! -name 'main.cpp.o')
           echo "libstockfish.a: $(du -h libstockfish.a | cut -f1)"
 
-      - name: Fetch Maia CoreML model into layout
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Setup Python for Maia export
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Convert and validate official Maia 79M
         run: |
-          mkdir -p "layout/Library/Application Support/Chess"
-          gh release download maia-model --repo epic0001/chess-assistant --pattern "maia3_5m.mlpackage.zip" --output model.zip
-          unzip -q model.zip -d "layout/Library/Application Support/Chess"
-          chmod -R a+rX "layout/Library/Application Support/Chess"
-          find "layout/Library/Application Support/Chess" -maxdepth 2 -print
-          MP="layout/Library/Application Support/Chess/maia3_5m.mlpackage"
-          cp "$MP/Manifest.json" maia_mfst.json
-          cp "$MP/Data/com.apple.CoreML/model.mlmodel" maia_model.bin
-          cp "$MP/Data/com.apple.CoreML/weights/weight.bin" maia_wghts.bin
-          ls -la maia_mfst.json maia_model.bin maia_wghts.bin
+          python -m pip install -r tools/maia79m/requirements.txt
+          python tools/maia79m/convert_validate.py --mode all
+          test -s tools/maia79m/maia3-79m.mlpackage/Manifest.json
+          test -s tools/maia79m/maia3-79m.mlpackage/Data/com.apple.CoreML/model.mlmodel
+          test -s tools/maia79m/maia3-79m.mlpackage/Data/com.apple.CoreML/weights/weight.bin
 
       - name: Setup Theos
-        uses: beerpiss/theos-action@v1
+        uses: beerpiss/theos-action@e27e8335ec3777c2daabedec89a9178b1d4e70c0
         with:
           cache: true
+
+      - name: Install DEB inspection tools
+        run: brew install dpkg
+
+      - name: Verify iOS tweak toolchain
+        run: |
+          command -v ldid
+          command -v dpkg-deb
+          test -d "$THEOS"
+          test -d "$THEOS/sdks"
+          test -f "$THEOS/vendor/include/substrate.h"
+          xcrun --sdk iphoneos --show-sdk-path
 
       - name: Build .deb
         run: make package FINALPACKAGE=1
         env:
           THEOS: ${{ github.workspace }}/theos
 
-      - name: Publish .deb as release
+      - name: Verify DEB metadata and embedded Maia package
+        run: |
+          set -euo pipefail
+          DEB=$(find packages -maxdepth 1 -type f -name '*.deb' -print -quit)
+          test -n "$DEB" && test -s "$DEB"
+          test "$(dpkg-deb -f "$DEB" Package)" = "com.chess.assistant"
+          test "$(dpkg-deb -f "$DEB" Version)" = "2.6.0"
+          test "$(dpkg-deb -f "$DEB" Architecture)" = "iphoneos-arm64"
+          dpkg-deb -f "$DEB" Depends | grep -q mobilesubstrate
+          ROOT="$RUNNER_TEMP/deb-root"
+          mkdir -p "$ROOT"
+          dpkg-deb -x "$DEB" "$ROOT"
+          DYLIB=$(find "$ROOT" -type f -name Chess.dylib -print -quit)
+          test -n "$DYLIB" && test -s "$DYLIB"
+          lipo -verify_arch arm64 "$DYLIB"
+          otool -l "$DYLIB" > "$RUNNER_TEMP/chess-load-commands.txt"
+          python - "$RUNNER_TEMP/chess-load-commands.txt" \
+              "tools/maia79m/maia3-79m.mlpackage" <<'PY'
+          import pathlib
+          import re
+          import sys
+
+          commands = pathlib.Path(sys.argv[1]).read_text()
+          package = pathlib.Path(sys.argv[2])
+          expected = {
+            "__maia_mfst": package / "Manifest.json",
+            "__maia_model": package / "Data/com.apple.CoreML/model.mlmodel",
+            "__maia_wghts": package / "Data/com.apple.CoreML/weights/weight.bin",
+          }
+          for section, source in expected.items():
+            blocks = re.split(r"(?=Load command \d+)", commands)
+            sizes = []
+            for block in blocks:
+              if re.search(rf"\bsectname\s+{re.escape(section)}\b", block):
+                match = re.search(r"\bsize\s+0x([0-9a-fA-F]+)", block)
+                if match:
+                  sizes.append(int(match.group(1), 16))
+            actual = source.stat().st_size
+            if sizes != [actual]:
+              raise SystemExit(
+                f"{section} embedded size mismatch: source={actual}, sections={sizes}"
+              )
+            print(f"{section}: embedded {actual} bytes")
+          PY
+          echo "Verified package: $DEB ($(du -h "$DEB" | cut -f1))"
+
+      - name: Upload DEB build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: chess-assistant-2.6.0-iphoneos-arm64
+          path: packages/*.deb
+          if-no-files-found: error
+
+      - name: Publish versioned .deb to rolling release
+        if: github.event_name == 'push'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           DEB=$(ls packages/*.deb | head -1)
-          echo "built: $DEB"
-
           gh release view latest --repo "$GITHUB_REPOSITORY" || \
             gh release create latest \
               --repo "$GITHUB_REPOSITORY" \
               --title "Chess Assistant (rolling build)" \
               --notes "Rolling development build." \
               --prerelease
-
           gh release upload latest "$DEB" --repo "$GITHUB_REPOSITORY" --clobber

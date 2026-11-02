@@ -1,12 +1,12 @@
 # Chess Assistant
 
-On-device chess move assistant for the Chess.com iOS app. It draws suggestions as arrows on the board, either the strongest move from a bundled Stockfish 18 or a human-like move from the Maia 3 neural network.
+On-device chess move assistant for the Chess.com iOS app. It draws suggestions as arrows on the board, either the strongest move from a bundled Stockfish 18 or a human-like move from the Maia 3 79M neural network.
 
 Everything runs locally on the device. No network requests, and no move data leaves your phone.
 
 ## Features
 
-Two engines to pick from. Stockfish 18 is statically linked with its NNUE nets embedded, and always goes for the strongest move. Maia 3 runs as a CoreML model and instead plays what a human around 1300 to 1900 ELO would play.
+Two engines to pick from. Stockfish 18 is statically linked with its NNUE nets embedded, and always goes for the strongest move. Maia 3 79M runs as a Core ML model and instead plays what a human around 1300 to 1900 ELO would play.
 
 - ELO slider from 400 to 3500, mapped to search depth plus skill level and UCI_LimitStrength
 - Up to 3 candidate arrows, each labeled with its own eval
@@ -71,11 +71,15 @@ done
 ar rcs libstockfish.a $(find . -name '*.cpp.o' ! -name 'main.cpp.o')
 cd ../..
 
-# build the deb (Maia model is fetched separately)
+# build the deb after exporting and validating Maia 79M on macOS
+python3.12 -m venv .venv-maia
+source .venv-maia/bin/activate
+python -m pip install -r tools/maia79m/requirements.txt
+python tools/maia79m/convert_validate.py --mode all
 make package FINALPACKAGE=1
 ```
 
-CI does all of this automatically. See [.github/workflows/build.yml](.github/workflows/build.yml). The Maia 3 CoreML model (`maia3_5m.mlpackage`) is downloaded from the repo's `maia-model` release during packaging and installed to `/var/jb/Library/Application Support/Chess/`.
+CI performs the same export and numerical checks on macOS before packaging. See [.github/workflows/build.yml](.github/workflows/build.yml). The official Maia 3 79M checkpoint is pinned in [tools/maia79m](tools/maia79m/README.md), converted into `tools/maia79m/maia3-79m.mlpackage`, then embedded in the tweak dylib. The app can fall back to that embedded package when the jailbreak model path is not readable.
 
 ## Project layout
 
@@ -83,7 +87,7 @@ CI does all of this automatically. See [.github/workflows/build.yml](.github/wor
 |------|---------|
 | `Tweak.xm` | Main tweak: board/FEN detection, arrow rendering, settings UI, auto play |
 | `engine.mm` | Stockfish embedded via UCI stream redirection (`EngineGo`, FEN legality, legal-move enumeration) |
-| `maia.mm` | Maia 3 CoreML inference wrapper |
+| `maia.mm` | Maia 3 Core ML inference wrapper (79M package) |
 | `web/` | Landing page / repo site |
 | `Makefile` | Theos tweak build (`com.chess.assistant`, rootless) |
 | `.github/workflows/` | CI: builds libstockfish.a + .deb, publishes releases & apt repo |
@@ -93,6 +97,6 @@ CI does all of this automatically. See [.github/workflows/build.yml](.github/wor
 - Made by @epicccccc ([YouTube](https://youtube.com/@epicccccc), Discord: `itzzace.`)
 - Yousseif ([usif-x](https://github.com/usif-x)) upgraded the engine to Stockfish 18 and added Auto Play with human-like timing and puzzle solving, quick pause, opening detection, Copy FEN, auto stats reset and other tweak updates
 - [Stockfish](https://stockfishchess.org), the GPL v3 chess engine
-- [Maia 3](https://github.com/CSSLab/maia3), human-like chess AI
+- [Maia 3 79M](https://huggingface.co/UofTCSSLab/Maia3-79M), human-like chess AI (AGPLv3)
 
 Licensed under GPL v3 where applicable, because of the Stockfish linkage.
